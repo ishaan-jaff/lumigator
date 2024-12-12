@@ -1,9 +1,5 @@
-import json
-import time
 from uuid import UUID
 
-import loguru
-import requests
 from fastapi import APIRouter, BackgroundTasks, status
 from lumigator_schemas.extras import ListingResponse
 from lumigator_schemas.jobs import (
@@ -22,19 +18,6 @@ from backend.api.http_headers import HttpHeaders
 router = APIRouter()
 
 
-def watch_job_completion(job_id: str):
-    status = "PENDING"
-
-    loguru.logger.info(f"Job id: {job_id}")
-    while status != "SUCCEEDED" and status != "FAILED":
-        res = requests.get(f"http://localhost:8000/api/v1/health/jobs/{job_id}")
-        status = json.loads(res.text)["status"]
-        loguru.logger.info(f"Job id: {job_id}, status: {status}")
-        time.sleep(5)
-
-    loguru.logger.info("The job completed")
-
-
 @router.post("/inference/", status_code=status.HTTP_201_CREATED)
 async def create_inference_job(
     service: JobServiceDep,
@@ -43,12 +26,13 @@ async def create_inference_job(
     response: Response,
     background_tasks: BackgroundTasks,
 ) -> JobResponse:
+    # allow the service to append background tasks if needed
+    service._background_tasks = background_tasks
+
     job_response = service.create_job(job_create_request)
 
     url = request.url_for(get_job.__name__, job_id=job_response.id)
     response.headers[HttpHeaders.LOCATION] = f"{url}"
-
-    background_tasks.add_task(watch_job_completion, job_response.id)
 
     return job_response
 

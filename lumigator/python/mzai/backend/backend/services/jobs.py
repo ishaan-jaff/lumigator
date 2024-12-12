@@ -1,7 +1,10 @@
+import json
+import time
 from pathlib import Path
 from uuid import UUID
 
 import loguru
+import requests
 from fastapi import HTTPException, status
 from lumigator_schemas.extras import ListingResponse
 from lumigator_schemas.jobs import (
@@ -57,6 +60,7 @@ class JobService:
         self.result_repo = result_repo
         self.ray_client = ray_client
         self.data_service = data_service
+        self._background_tasks = None
 
     def _raise_not_found(self, job_id: UUID):
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Job {job_id} not found.")
@@ -162,6 +166,18 @@ class JobService:
 
         return job_params
 
+    def watch_job_completion(self, job_id: str):
+        status = "PENDING"
+
+        loguru.logger.info(f"Job id: {job_id}")
+        while status != "SUCCEEDED" and status != "FAILED":
+            res = requests.get(f"http://localhost:8000/api/v1/health/jobs/{job_id}")
+            status = json.loads(res.text)["status"]
+            loguru.logger.info(f"Job id: {job_id}, status: {status}")
+            time.sleep(5)
+
+        loguru.logger.info("The job completed")
+
     def create_job(self, request: JobEvalCreate | JobInferenceCreate) -> JobResponse:
         """Creates a new evaluation workload to run on Ray and returns the response status."""
         if isinstance(request, JobEvalCreate):
@@ -228,6 +244,8 @@ class JobService:
         )
         loguru.logger.info("Submitting Ray job...")
         submit_ray_job(self.ray_client, entrypoint)
+
+        self._background_tasks.add_task(self.watch_job_completion, record.id)
 
         loguru.logger.info("Getting response...")
         return JobResponse.model_validate(record)
