@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from lumigator_schemas.extras import ListingResponse
 from lumigator_schemas.jobs import (
     Job,
+    JobAnnotateCreate,
     JobEvalCreate,
     JobInferenceCreate,
     JobLogsResponse,
@@ -41,6 +42,32 @@ def create_inference_job(
     # and will run only once the response has been sent.
     # See here: https://www.starlette.io/background/
     job_response = service.create_job(job_create_request, background_tasks)
+
+    url = request.url_for(get_job.__name__, job_id=job_response.id)
+    response.headers[HttpHeaders.LOCATION] = f"{url}"
+
+    return job_response
+
+
+@router.post("/annotate/", status_code=status.HTTP_201_CREATED)
+def create_annotation_job(
+    service: JobServiceDep,
+    job_create_request: JobAnnotateCreate,
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks,
+) -> JobResponse:
+    # Lumigator's opinion on the best summarization model
+    # and the one that should generate annotations.
+    # In the future, we could expose this via a config file
+    # so that, for a supported task, there is a default
+    # "reference" model. For now, we keep the current functionality:
+    # Lumigator decides who annotates.
+
+    inference_job_create_request = JobInferenceCreate(
+        **job_create_request.dict(), model="hf://facebook/bart-large-cnn"
+    )
+    job_response = service.create_job(inference_job_create_request, background_tasks)
 
     url = request.url_for(get_job.__name__, job_id=job_response.id)
     response.headers[HttpHeaders.LOCATION] = f"{url}"
