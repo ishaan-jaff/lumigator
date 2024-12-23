@@ -57,13 +57,10 @@ def create_annotation_job(
     response: Response,
     background_tasks: BackgroundTasks,
 ) -> JobResponse:
-    # Lumigator's opinion on the best summarization model
-    # and the one that should generate annotations.
-    # In the future, we could expose this via a config file
-    # so that, for a supported task, there is a default
-    # "reference" model. For now, we keep the current functionality:
-    # Lumigator decides who annotates.
-
+    """This uses a hardcoded model, that is, Lumigator's opinion on the what
+    reference model should be used to generate annotations.
+    See more: https://blog.mozilla.ai/lets-build-an-app-for-evaluating-llms/
+    """
     inference_job_create_request = JobInferenceCreate(
         **job_create_request.dict(), model="hf://facebook/bart-large-cnn"
     )
